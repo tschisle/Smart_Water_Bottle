@@ -1,0 +1,30 @@
+################################################################################
+#             Syntax Coloring Map for Smart Water Bottle                       #
+################################################################################
+
+################################################################################
+# Datatypes (KEYWORD1)
+################################################################################
+
+CapacitiveSensor	KEYWORD1
+PLSF_Filter	KEYWORD1
+
+################################################################################
+# Methods and Functions (KEYWORD2)
+################################################################################
+
+capacitiveSensorRaw	KEYWORD2
+capacitiveSensor	KEYWORD2
+set_CS_Timeout_Millis	KEYWORD2
+reset_CS_AutoCal	KEYWORD2
+set_CS_AutocaL_Millis	KEYWORD2
+PLSF_Initialization	KEYWORD2
+PLSF_Update	KEYWORD2
+PLSF_Clear	KEYWORD2
+touchRead	KEYWORD2
+
+################################################################################
+# Constants (LITERAL1)
+################################################################################
+
+samples	LITERAL1
