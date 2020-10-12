@@ -2,10 +2,12 @@
 #include <driver/adc.h>
 
 //-=-=-=-=-=-  Constants
-#define pls_samples 20
+#define pls_samples 3
 #define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
+const long cs_full = 25900;
+const long cs_empty = 3800;
 
 //-=-=-=-=-=-  Global Variables & Arrays
 int sensor_data[6] = {0, 0, 0, 0, 0, 0}; // Battery voltage (mV), Temperature (C), Water Level (fl-oz), Battery Low?, Battery Charged?, Dumped?
@@ -19,6 +21,10 @@ int sensor_data[6] = {0, 0, 0, 0, 0, 0}; // Battery voltage (mV), Temperature (C
 
    Boolean variables currently will not be cleared by the sensor code to ensure they are used properly
 */
+long cs1_raw;
+long cs2_raw;
+long cs_temp;
+float cs_floz;
 unsigned long max_time_between_drinks = 5000; //ms
 int analog_battery = 0;
 int analog_thermistor = 0;
@@ -81,8 +87,8 @@ class PLSF_Filter
       least_square_slope_inter[1] = least_square_avg - (least_square_slope_inter[0] * ((pls_samples + 1) / 2)); //intercept
       //approximating current mag data from best fit LINE and reporting movement percentage
       approximation = (least_square_slope_inter[0] * pls_samples) + least_square_slope_inter[1];
-      //this step provides the unitless value
-      return (approximation);
+      //this step provides the slope
+      return (least_square_slope_inter[0]);
     }
     void PLSF_Clear(void) { //clears the variables, matrices  (this function should be called before the first calibration step each time it's called
       //Precalculating static least square values HAS REDUNDANT ELEMENTS
@@ -104,8 +110,7 @@ class PLSF_Filter
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Object Creation
 CapacitiveSensor   cs1 = CapacitiveSensor(33, 25); //pin 25 is the receiver
 CapacitiveSensor   cs2 = CapacitiveSensor(35, 32); //pin 32 is the receiver
-PLSF_Filter cap1;
-PLSF_Filter cap2;
+PLSF_Filter cap;
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Setup
 void setup() {
@@ -129,8 +134,7 @@ void loop() {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Sensor Initialization
 int sensor_initialization(void) {
   if (!DUMMY_SENSORS) {
-    //cap1.PLSF_Initialization();
-    //cap2.PLSF_Initialization();
+    cap.PLSF_Initialization();
   }
   return (sensor_update());
 }
@@ -138,6 +142,7 @@ int sensor_initialization(void) {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Sensor Update
 int sensor_update(void) {
   if (!DUMMY_SENSORS) {
+    //-=-=-=-=-=-=-=-=-=-=-     Battery     -=-=-=-=-=-=-=-=-=-=-     
     adc2_get_raw(ADC2_CHANNEL_9, ADC_WIDTH_12Bit, &analog_battery);
     sensor_data[0] = (int) (ADC_correction(analog_battery) * 1.612); //Battery ideal conversion factor = 1.612
     if (sensor_data[0] < 3400) {
@@ -146,10 +151,23 @@ int sensor_update(void) {
     } else if (sensor_data[0] >= 4200) {
       sensor_data[4] = 1; //sets battery charged flag
     }
-    //cap1.PLSF_Update(cs1.capacitiveSensorRaw(10));
-    //cap2.PLSF_Update(cs2.capacitiveSensorRaw(10));
+    //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-     
+    cs1_raw = cs1.capacitiveSensorRaw(30);
+    cs2_raw = cs2.capacitiveSensorRaw(30);
+    cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
+    if(cs_temp < 0){
+      cs_temp = 0;
+    }else if(cs_temp > 100){
+      cs_temp = 100;
+    }
+    cs_floz = ((float)cs_temp/100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
+    if((cap.PLSF_Update(cs_floz) < -12) && (cs_floz == 0)){
+      sensor_data[5] = 1;
+    }
+    sensor_data[2] = cs_floz; 
+    //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-     
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
-    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); //Thermistor
+    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); 
   } else {
     if (millis() >= time_update) {
       if ((sensor_data_test_stepper == 1) || (sensor_data_test_stepper == 6)) {
