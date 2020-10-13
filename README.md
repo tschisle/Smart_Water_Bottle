@@ -11,7 +11,9 @@ Repository Contents
 Example Briefs
 --------------
 
-* CapacitiveSensorSketch &mdash; The given example code from the CapacitiveSensor Library
+* CapacitiveSensorSketch &mdash; An edited version of the given example code from the CapacitiveSensor Library
+* Sensors &mdash; The latest version of the code that does the data acquisition for the sensors and sets their outputs into an array
+* Thermistor_Test &mdash; A test version that only deals with the thermistor
 
 Documentation
 --------------
