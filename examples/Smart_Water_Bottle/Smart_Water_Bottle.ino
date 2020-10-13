@@ -46,7 +46,6 @@ int ledPin = 2;// Setup GPIO2 for LED output
 bool led_on = false;// LED on flag
 int total_volume = 0;// Total amount of water inside the bottle
 unsigned long drink_time = 0;// Amount of time since user drank
-unsigned long drink_time = 0;// Amount of time since user drank
 unsigned long hour_time = 0;// Running timer to track hourly water consumption
 int drank_last_hour = 0;// Amount of water drank in the last hour
 int drank_last_day_arr[23] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};// Array to keep track of amount of water drank in the 23 hours before
