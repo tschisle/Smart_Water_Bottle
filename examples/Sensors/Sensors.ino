@@ -8,6 +8,7 @@ const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
 const long cs_empty = 3800;
+const float cs_dump_slope = -12;
 
 //-=-=-=-=-=-  Global Variables & Arrays
 int sensor_data[6] = {0, 0, 0, 0, 0, 0}; // Battery voltage (mV), Temperature (C), Water Level (fl-oz), Battery Low?, Battery Charged?, Dumped?
@@ -161,10 +162,10 @@ int sensor_update(void) {
       cs_temp = 100;
     }
     cs_floz = ((float)cs_temp/100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
-    if((cap.PLSF_Update(cs_floz) < -12) && (cs_floz == 0)){
+    if((cap.PLSF_Update(cs_floz) < cs_dump_slope) && (cs_floz == 0)){
       sensor_data[5] = 1;
     }
-    sensor_data[2] = cs_floz; 
+    sensor_data[2] = (int)cs_floz; 
     //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-     
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
     sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); 
