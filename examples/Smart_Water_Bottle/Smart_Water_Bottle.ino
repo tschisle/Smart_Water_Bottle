@@ -150,6 +150,7 @@ void setup() {
   // Initiate time since last drink
   //drink_time = millis();
   hour_time = millis();
+  delay(2000);
 }
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
@@ -237,11 +238,11 @@ int sensor_update(void) {
       } else {
         time_update = millis() + time_between_arrary_updates;
       }
-      if (sensor_data_test_stepper < 9) {
-        sensor_data_test_stepper++;
-      }
       for (int x = 0; x < 6; x++) {
         sensor_data[x] = sensor_data_test[sensor_data_test_stepper][x];
+      }
+      if (sensor_data_test_stepper < 9) {
+        sensor_data_test_stepper++;
       }
     }
   }
