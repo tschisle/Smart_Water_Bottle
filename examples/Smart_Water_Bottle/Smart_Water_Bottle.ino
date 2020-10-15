@@ -52,6 +52,14 @@ int drank_last_day_arr[23] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Filter
+/***************************************************************************************
+*    Title: Predicitve Least Squares Filter
+*    Author: Trey Schisler
+*    Date: 5/15/2020
+*    Code version: 0.3
+*    Availability: https://github.com/tschisle/ESP-32_MPU9250_VR-Glove
+*
+***************************************************************************************/
 class PLSF_Filter
 {
     //Variables/Matrices
