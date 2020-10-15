@@ -167,6 +167,7 @@ void loop() {
   // If water level increaes update water statistics
   if (sensor_data[2] > total_volume){
     update_display();
+    total_volume = sensor_data[2];
   // If water level decreases, update water and user statistics depending on if they drank or dumped water 
   } else if (sensor_data[2] < total_volume){
     int decrease = total_volume - sensor_data[2];
@@ -378,6 +379,5 @@ int drank_last_day(){
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Millis to Minute Conversion
 // Converts milliseconds to minutes
 unsigned long millis_to_min(unsigned long mils){
-  unsigned long mins = (mils / 60000);
-  return mins;
+  return (mils / 60000);
 }
