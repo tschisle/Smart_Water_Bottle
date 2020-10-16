@@ -15,6 +15,8 @@ const float cs_dump_slope = -12;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
+const float settle_slope_tolerance = 0.25;  //will update water level after the change of water settles
+
 
 //-=-=-=-=-=-  Global Variables & Arrays
 int sensor_data[6] = {0, 0, 0, 0, 0, 0}; // Battery voltage (mV), Temperature (C), Water Level (fl-oz), Battery Low?, Battery Charged?, Dumped?
@@ -35,6 +37,7 @@ float cs_floz;
 unsigned long max_time_between_drinks = 5000; //ms
 int analog_battery = 0;
 int analog_thermistor = 0;
+bool dump_flag = false; //used for checking for if dump slope condition was met
 
 //-=-=-=-=-=-  DEBUGGING Global Variables & Arrays
 //                                full, normal                one drink                 two drinks                dumped                 refilled          full, cold, charged        hot, one drink            two drinks              three drinks               dead battery
@@ -53,12 +56,12 @@ int drank_last_day_arr[23] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Filter
 /***************************************************************************************
-*    Title: Predicitve Least Squares Filter
-*    Author: Trey Schisler
-*    Date: 5/15/2020
-*    Code version: 0.3
-*    Availability: https://github.com/tschisle/ESP-32_MPU9250_VR-Glove
-*
+     Title: Predicitve Least Squares Filter
+     Author: Trey Schisler
+     Date: 5/15/2020
+     Code version: 0.3
+     Availability: https://github.com/tschisle/ESP-32_MPU9250_VR-Glove
+
 ***************************************************************************************/
 class PLSF_Filter
 {
@@ -173,11 +176,11 @@ void loop() {
     drank_last_hour = 0;
   }
   // If water level increaes update water statistics
-  if (sensor_data[2] > total_volume){
+  if (sensor_data[2] > total_volume) {
     update_display();
     total_volume = sensor_data[2];
-  // If water level decreases, update water and user statistics depending on if they drank or dumped water 
-  } else if (sensor_data[2] < total_volume){
+    // If water level decreases, update water and user statistics depending on if they drank or dumped water
+  } else if (sensor_data[2] < total_volume) {
     int decrease = total_volume - sensor_data[2];
     total_volume = sensor_data[2];
     if (!sensor_data[5]) {
@@ -194,9 +197,9 @@ void loop() {
       led_on = false;
     } else {
       digitalWrite(ledPin, HIGH);
-      delay(1000);  
+      delay(1000);
       led_on = true;
-    } 
+    }
   }
   //↓ REPLACE WITH LIGHT SLEEP ↓
   delay(update_time);
@@ -214,7 +217,7 @@ int sensor_initialization(void) {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Sensor Update
 int sensor_update(void) {
   if (!DUMMY_SENSORS) {
-    //-=-=-=-=-=-=-=-=-=-=-     Battery     -=-=-=-=-=-=-=-=-=-=-     
+    //-=-=-=-=-=-=-=-=-=-=-     Battery     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_9, ADC_WIDTH_12Bit, &analog_battery);
     sensor_data[0] = (int) (ADC_correction(analog_battery) * 1.612); //Battery ideal conversion factor = 1.612
     if (sensor_data[0] < 3400) {
@@ -223,24 +226,31 @@ int sensor_update(void) {
     } else if (sensor_data[0] >= 4200) {
       sensor_data[4] = 1; //sets battery charged flag
     }
-    //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-     
+    //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-
     cs1_raw = cs1.capacitiveSensorRaw(30);
     cs2_raw = cs2.capacitiveSensorRaw(30);
     cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
-    if(cs_temp < 0){
+    if (cs_temp < 0) {
       cs_temp = 0;
-    }else if(cs_temp > 100){
+    } else if (cs_temp > 100) {
       cs_temp = 100;
     }
-    cs_floz = ((float)cs_temp/100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
-    if((cap.PLSF_Update(cs_floz) < cs_dump_slope) && (cs_floz == 0)){
-      sensor_data[5] = 1;
+    cs_floz = ((float)cs_temp / 100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
+    if (cap.PLSF_Update(cs_floz) < cs_dump_slope) {
+      dump_flag = true;
     }
-    sensor_data[2] = (int)cs_floz; 
-    //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-     
+    if (abs(cap.PLSF_Update(cs_floz)) < settle_slope_tolerance) { //only updates water level when rate of change is near 0 (this also means it'll update if the person drinks slowly and consistently)
+      if (dump_flag && (cs_floz == 0)) {
+        sensor_data[5] = 1;
+        dump_flag = false;
+      }
+      sensor_data[2] = (int)cs_floz;
+    }
+    //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
-    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); 
+    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor));
   } else {
+    //-=-=-=-=-=-=-=-=-=-=-     Dummy Sensors     -=-=-=-=-=-=-=-=-=-=-
     if (millis() >= time_update) {
       if ((sensor_data_test_stepper == 1) || (sensor_data_test_stepper == 6)) {
         time_update = millis() + max_time_between_drinks + time_between_arrary_updates; //to trigger the Drink Reminder LED
@@ -287,21 +297,21 @@ void update_display(void) {
   display.setTextSize(1);
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
-  
-  display.print("Volume (oz): "); 
+
+  display.print("Volume (oz): ");
   display.println(sensor_data[2]);
-  
+
   display.print("Temperature (C): ");
   display.println(sensor_data[1]);
 
-  if(!sensor_data[2]) {
+  if (!sensor_data[2]) {
     display.println("No water in bottle!!!");
     display.println("");
   } else {
     display.println("");
     display.println("");
   }
- 
+
   display.print("Last Drink: ");
   if (drink_time == 0) {
     display.println("N/A");
@@ -317,18 +327,18 @@ void update_display(void) {
       display.println(" hr");
       //display.print(mins);
       //display.println(" min ago");
-      
+
     } else {
       display.print(minutes_elapsed);
       display.println(" min");
     }
   }
-  
+
   display.println("Amount Drank (oz)");
   display.print("Last Hour: ");
   display.println(drank_last_hour);
 
-  
+
   display.print("Last 24 Hours: ");
   display.println(drank_last_day());
   display.display();
@@ -347,7 +357,7 @@ void check_low_battery() {
 }
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Display Low Battery
-void display_low_battery(){
+void display_low_battery() {
   display.clearDisplay();
   display.setTextSize(2);
   display.setTextColor(WHITE);
@@ -357,7 +367,7 @@ void display_low_battery(){
 }
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Update Stats
-void update_statistics(int amount_drank){
+void update_statistics(int amount_drank) {
   unsigned long cur_time = millis();
   // Reset drink timer
   drink_time = cur_time;
@@ -368,14 +378,14 @@ void update_statistics(int amount_drank){
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Update Last Day Array
 void update_last_day_array(int new_hourly_volume) {
   for (int i = 22; i >= 0; i--) {
-    drank_last_day_arr[i+1] = drank_last_day_arr[i];
+    drank_last_day_arr[i + 1] = drank_last_day_arr[i];
   }
   drank_last_day_arr[0] = new_hourly_volume;
 }
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Drank Last Day
-// Calculates the amount of water drank in the last 24 hours 
-int drank_last_day(){
+// Calculates the amount of water drank in the last 24 hours
+int drank_last_day() {
   int amount_drank = 0;
   for (int i = 0; i < 23; i++) {
     amount_drank += drank_last_day_arr[i];
@@ -386,6 +396,6 @@ int drank_last_day(){
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Millis to Minute Conversion
 // Converts milliseconds to minutes
-unsigned long millis_to_min(unsigned long mils){
+unsigned long millis_to_min(unsigned long mils) {
   return (mils / 60000);
 }
