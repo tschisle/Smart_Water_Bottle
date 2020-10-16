@@ -5,13 +5,13 @@
 #include <Adafruit_SSD1306.h>
 
 //-=-=-=-=-=-  Constants
-#define pls_samples 3
-#define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define pls_samples 5
+#define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
 const long cs_empty = 3800;
-const float cs_dump_slope = -12;
+const float cs_dump_slope = -1;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
@@ -166,6 +166,11 @@ void setup() {
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
 void loop() {
+  for (int i=0; i<6; i++){
+    Serial.print(sensor_data[i]);
+    Serial.print(" ");
+  }
+  Serial.println("");
   sensor_update();
   unsigned long cur_time = millis();
   check_low_battery();
@@ -185,7 +190,10 @@ void loop() {
     total_volume = sensor_data[2];
     if (!sensor_data[5]) {
       update_statistics(decrease);
+    } else {
+      sensor_data[5] = 0;
     }
+    
     update_display();
   }
   update_display();
@@ -200,6 +208,10 @@ void loop() {
       delay(1000);
       led_on = true;
     }
+  }else if(led_on){
+    digitalWrite(ledPin, LOW);
+    delay(1000);
+    led_on = false;
   }
   //↓ REPLACE WITH LIGHT SLEEP ↓
   delay(update_time);
@@ -228,8 +240,9 @@ int sensor_update(void) {
     }
     //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-
     cs1_raw = cs1.capacitiveSensorRaw(30);
-    cs2_raw = cs2.capacitiveSensorRaw(30);
-    cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
+    //cs2_raw = cs2.capacitiveSensorRaw(30);
+    cs_temp = map((cs1_raw + cs1_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
+    //cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
     if (cs_temp < 0) {
       cs_temp = 0;
     } else if (cs_temp > 100) {
