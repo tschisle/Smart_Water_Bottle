@@ -5,13 +5,13 @@
 #include <Adafruit_SSD1306.h>
 
 //-=-=-=-=-=-  Constants
-#define pls_samples 5
+#define pls_samples 2
 #define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
 const long cs_empty = 3800;
-const float cs_dump_slope = -1;
+const float cs_dump_slope = -0.75;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
@@ -166,12 +166,13 @@ void setup() {
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
 void loop() {
+  sensor_update();
   for (int i=0; i<6; i++){
     Serial.print(sensor_data[i]);
     Serial.print(" ");
   }
   Serial.println("");
-  sensor_update();
+  
   unsigned long cur_time = millis();
   check_low_battery();
   // Reset hourly statistics if an hour has passed
@@ -249,11 +250,17 @@ int sensor_update(void) {
       cs_temp = 100;
     }
     cs_floz = ((float)cs_temp / 100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
-    if (cap.PLSF_Update(cs_floz) < cs_dump_slope) {
+
+    float test = cap.PLSF_Update(cs_floz);
+    if (test < cs_dump_slope) {
       dump_flag = true;
     }
-    if (abs(cap.PLSF_Update(cs_floz)) < settle_slope_tolerance) { //only updates water level when rate of change is near 0 (this also means it'll update if the person drinks slowly and consistently)
-      if (dump_flag && (cs_floz == 0)) {
+    Serial.print("slope: ");
+    Serial.print(test);
+    Serial.print("   df = ");
+    Serial.println(dump_flag);
+    if (abs(test) < abs(settle_slope_tolerance)) { //only updates water level when rate of change is near 0 (this also means it'll update if the person drinks slowly and consistently)
+      if (dump_flag && ((int)cs_floz == 0)) {
         sensor_data[5] = 1;
         dump_flag = false;
       }
