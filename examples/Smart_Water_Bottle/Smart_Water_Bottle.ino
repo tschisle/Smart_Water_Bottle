@@ -16,6 +16,7 @@ const float cs_dump_slope = -0.75;
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
 const float settle_slope_tolerance = 0.25;  //will update water level after the change of water settles
+const float intermediate_ounce_tolerance = 0.33; //this limits the ounce updates to only occur when the level increases or decreases beyond this tolerance, this was done because the cases where the amount of water was inbetween ounce measurements would bounce between ounces and count as drinks
 
 
 //-=-=-=-=-=-  Global Variables & Arrays
@@ -34,6 +35,7 @@ long cs1_raw;
 long cs2_raw;
 long cs_temp;
 float cs_floz;
+float prev_cs_floz;
 unsigned long max_time_between_drinks = 5000; //ms
 int analog_battery = 0;
 int analog_thermistor = 0;
@@ -167,12 +169,12 @@ void setup() {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
 void loop() {
   sensor_update();
-  for (int i=0; i<6; i++){
+  for (int i = 0; i < 6; i++) {
     Serial.print(sensor_data[i]);
     Serial.print(" ");
   }
   Serial.println("");
-  
+
   unsigned long cur_time = millis();
   check_low_battery();
   // Reset hourly statistics if an hour has passed
@@ -194,7 +196,7 @@ void loop() {
     } else {
       sensor_data[5] = 0;
     }
-    
+
     update_display();
   }
   update_display();
@@ -209,7 +211,7 @@ void loop() {
       delay(1000);
       led_on = true;
     }
-  }else if(led_on){
+  } else if (led_on) {
     digitalWrite(ledPin, LOW);
     delay(1000);
     led_on = false;
@@ -264,7 +266,10 @@ int sensor_update(void) {
         sensor_data[5] = 1;
         dump_flag = false;
       }
-      sensor_data[2] = (int)cs_floz;
+      if (abs(prev_cs_floz - cs_floz) > intermediate_ounce_tolerance) { //if the change in ounces is greater than the tolerance  
+        prev_cs_floz = cs_floz;
+        sensor_data[2] = (int)cs_floz;
+      }
     }
     //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
