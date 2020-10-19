@@ -5,17 +5,18 @@
 #include <Adafruit_SSD1306.h>
 
 //-=-=-=-=-=-  Constants
-#define pls_samples 3
-#define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define pls_samples 2
+#define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
 const long cs_empty = 3800;
-const float cs_dump_slope = -12;
+const float cs_dump_slope = -0.75;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
 const float settle_slope_tolerance = 0.25;  //will update water level after the change of water settles
+const float intermediate_ounce_tolerance = 0.33; //this limits the ounce updates to only occur when the level increases or decreases beyond this tolerance, this was done because the cases where the amount of water was inbetween ounce measurements would bounce between ounces and count as drinks
 
 
 //-=-=-=-=-=-  Global Variables & Arrays
@@ -34,6 +35,7 @@ long cs1_raw;
 long cs2_raw;
 long cs_temp;
 float cs_floz;
+float prev_cs_floz;
 unsigned long max_time_between_drinks = 5000; //ms
 int analog_battery = 0;
 int analog_thermistor = 0;
@@ -167,6 +169,12 @@ void setup() {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
 void loop() {
   sensor_update();
+  for (int i = 0; i < 6; i++) {
+    Serial.print(sensor_data[i]);
+    Serial.print(" ");
+  }
+  Serial.println("");
+
   unsigned long cur_time = millis();
   check_low_battery();
   // Reset hourly statistics if an hour has passed
@@ -185,7 +193,10 @@ void loop() {
     total_volume = sensor_data[2];
     if (!sensor_data[5]) {
       update_statistics(decrease);
+    } else {
+      sensor_data[5] = 0;
     }
+
     update_display();
   }
   update_display();
@@ -200,7 +211,7 @@ void loop() {
       delay(1000);
       led_on = true;
     }
-  } else if(led_on){
+  } else if (led_on) {
     digitalWrite(ledPin, LOW);
     delay(1000);
     led_on = false;
@@ -232,23 +243,33 @@ int sensor_update(void) {
     }
     //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-
     cs1_raw = cs1.capacitiveSensorRaw(30);
-    cs2_raw = cs2.capacitiveSensorRaw(30);
-    cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
+    //cs2_raw = cs2.capacitiveSensorRaw(30);
+    cs_temp = map((cs1_raw + cs1_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
+    //cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
     if (cs_temp < 0) {
       cs_temp = 0;
     } else if (cs_temp > 100) {
       cs_temp = 100;
     }
     cs_floz = ((float)cs_temp / 100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
-    if (cap.PLSF_Update(cs_floz) < cs_dump_slope) {
+
+    float test = cap.PLSF_Update(cs_floz);
+    if (test < cs_dump_slope) {
       dump_flag = true;
     }
-    if (abs(cap.PLSF_Update(cs_floz)) < settle_slope_tolerance) { //only updates water level when rate of change is near 0 (this also means it'll update if the person drinks slowly and consistently)
-      if (dump_flag && (cs_floz == 0)) {
+    Serial.print("slope: ");
+    Serial.print(test);
+    Serial.print("   df = ");
+    Serial.println(dump_flag);
+    if (abs(test) < abs(settle_slope_tolerance)) { //only updates water level when rate of change is near 0 (this also means it'll update if the person drinks slowly and consistently)
+      if (dump_flag && ((int)cs_floz == 0)) {
         sensor_data[5] = 1;
         dump_flag = false;
       }
-      sensor_data[2] = (int)cs_floz;
+      if (abs(prev_cs_floz - cs_floz) > intermediate_ounce_tolerance) { //if the change in ounces is greater than the tolerance
+        prev_cs_floz = cs_floz;
+        sensor_data[2] = (int)cs_floz;
+      }
     }
     //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
