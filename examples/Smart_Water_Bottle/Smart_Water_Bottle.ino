@@ -200,6 +200,10 @@ void loop() {
       delay(1000);
       led_on = true;
     }
+  } else if(led_on){
+    digitalWrite(ledPin, LOW);
+    delay(1000);
+    led_on = false;
   }
   //↓ REPLACE WITH LIGHT SLEEP ↓
   delay(update_time);
