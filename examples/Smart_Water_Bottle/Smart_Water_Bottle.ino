@@ -190,7 +190,7 @@ void loop() {
   }
   update_display();
   // Replace with flip flop for final product
-  if ((cur_time - drink_time) > 3600000) {
+  if (((cur_time - drink_time) > 3600000) && (drink_time != 0)) {
     if (led_on) {
       digitalWrite(ledPin, LOW);
       delay(1000);
