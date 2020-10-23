@@ -3,7 +3,7 @@
 
 //-=-=-=-=-=-  Constants
 #define pls_samples 20
-#define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 
@@ -120,8 +120,10 @@ void setup() {
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Loop
 void loop() {
-  sensor_update();
-  Serial.println(sensor_data[1]);
+  adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
+  sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); //Thermistor
+  Serial.print(sensor_data[1]);
+  Serial.println(" C");
   delay(250);
 }
 
@@ -149,7 +151,7 @@ int sensor_update(void) {
     //cap1.PLSF_Update(cs1.capacitiveSensorRaw(10));
     //cap2.PLSF_Update(cs2.capacitiveSensorRaw(10));
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
-    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)); //Thermistor
+    sensor_data[1] = thermistor_conversion(analog_thermistor); //Thermistor
   } else {
     if (millis() >= time_update) {
       if ((sensor_data_test_stepper == 1) || (sensor_data_test_stepper == 6)) {
