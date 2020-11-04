@@ -47,7 +47,8 @@ int sensor_data_test[10][6] = {{3700, 8, 32, 0, 0, 0}, {3700, 12, 24, 0, 0, 0}, 
 int sensor_data_test_stepper = 0; //steps through the matrix - micro should get stuck on the last step
 unsigned long time_between_arrary_updates = 1500; //ms
 unsigned long time_update; //required to send out array updates
-int ledPin = 2;// Setup GPIO2 for LED output
+int ledData = 2; // Setup GPIO2 for LED flip flop data line
+int ledClock = 4; // setup GPIO4 for LED flip flop clock line
 bool led_on = false;// LED on flag
 int total_volume = 0;// Total amount of water inside the bottle
 unsigned long drink_time = 0;// Amount of time since user drank
@@ -147,7 +148,8 @@ void setup() {
   Serial.begin(115200);
   adc2_config_channel_atten( ADC2_CHANNEL_7, ADC_ATTEN_11db );
   adc2_config_channel_atten( ADC2_CHANNEL_9, ADC_ATTEN_11db );
-  pinMode(ledPin, OUTPUT);
+  pinMode(ledData, OUTPUT);
+  pinMode(ledClock, OUTPUT);
   Serial.begin(115200);
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
@@ -203,17 +205,20 @@ void loop() {
   // Replace with flip flop for final product
   if (((cur_time - drink_time) > 3600000) && (drink_time != 0)) {
     if (led_on) {
-      digitalWrite(ledPin, LOW);
-      delay(1000);
+      digitalWrite(ledData, LOW);
+      digitalWrite(ledClock, HIGH);
+      digitalWrite(ledClock, LOW);
       led_on = false;
     } else {
-      digitalWrite(ledPin, HIGH);
-      delay(1000);
+      digitalWrite(ledData, HIGH);
+      digitalWrite(ledClock, HIGH);
+      digitalWrite(ledClock, LOW);
       led_on = true;
     }
   } else if (led_on) {
-    digitalWrite(ledPin, LOW);
-    delay(1000);
+    digitalWrite(ledData, LOW);
+    digitalWrite(ledClock, HIGH);
+    digitalWrite(ledClock, LOW);
     led_on = false;
   }
   //↓ REPLACE WITH LIGHT SLEEP ↓
