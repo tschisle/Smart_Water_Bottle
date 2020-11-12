@@ -6,7 +6,8 @@
 
 //-=-=-=-=-=-  Constants
 #define pls_samples 2
-#define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
+#define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define LED_TEST 1 // 1 - flashes LED regardless of reminder state, 0 - normal operation
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
@@ -47,8 +48,8 @@ int sensor_data_test[10][6] = {{3700, 8, 32, 0, 0, 0}, {3700, 12, 24, 0, 0, 0}, 
 int sensor_data_test_stepper = 0; //steps through the matrix - micro should get stuck on the last step
 unsigned long time_between_arrary_updates = 1500; //ms
 unsigned long time_update; //required to send out array updates
-int ledData = 2; // Setup GPIO2 for LED flip flop data line
-int ledClock = 4; // setup GPIO4 for LED flip flop clock line
+int ledData = 16; // Setup GPIO2 for LED flip flop data line
+int ledClock = 17; // setup GPIO4 for LED flip flop clock line
 bool led_on = false;// LED on flag
 int total_volume = 0;// Total amount of water inside the bottle
 unsigned long drink_time = 0;// Amount of time since user drank
@@ -146,6 +147,7 @@ Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 void setup() {
   sensor_initialization();
   Serial.begin(115200);
+  esp_sleep_enable_timer_wakeup(update_time * 1000); //in microseconds
   adc2_config_channel_atten( ADC2_CHANNEL_7, ADC_ATTEN_11db );
   adc2_config_channel_atten( ADC2_CHANNEL_9, ADC_ATTEN_11db );
   pinMode(ledData, OUTPUT);
@@ -203,7 +205,7 @@ void loop() {
   }
   update_display();
   // Replace with flip flop for final product
-  if (((cur_time - drink_time) > 3600000) && (drink_time != 0)) {
+  if ((((cur_time - drink_time) > 3600000) && (drink_time != 0)) || (LED_TEST == 1)) {
     if (led_on) {
       digitalWrite(ledData, LOW);
       digitalWrite(ledClock, HIGH);
@@ -221,8 +223,7 @@ void loop() {
     digitalWrite(ledClock, LOW);
     led_on = false;
   }
-  //↓ REPLACE WITH LIGHT SLEEP ↓
-  delay(update_time);
+  esp_light_sleep_start();
 }
 
 
