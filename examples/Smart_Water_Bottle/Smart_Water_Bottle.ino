@@ -385,7 +385,7 @@ void check_low_battery() {
     display.clearDisplay();
     display.display();
     while (1) {
-      esp_deep_sleep_start();
+      esp_light_sleep_start();
     }
   }
 }
