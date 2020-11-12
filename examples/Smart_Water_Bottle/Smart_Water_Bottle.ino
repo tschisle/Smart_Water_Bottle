@@ -380,10 +380,13 @@ void check_low_battery() {
   if (sensor_data[3]) {
     // Shutdown if battery is low
     display_low_battery();
-    delay(2000);
+    esp_light_sleep_start();
+    esp_light_sleep_start();
     display.clearDisplay();
     display.display();
-    esp_deep_sleep_start();
+    while (1) {
+      esp_deep_sleep_start();
+    }
   }
 }
 
