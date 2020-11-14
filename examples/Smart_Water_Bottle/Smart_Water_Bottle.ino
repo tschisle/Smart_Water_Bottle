@@ -7,7 +7,11 @@
 //-=-=-=-=-=-  Constants
 #define pls_samples 2
 #define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define DUMMY_OVERRIDE_BATTERY 1 // 1 - uses the sensor, 0 - normal operation
+#define DUMMY_OVERRIDE_WATER 0 // 1 - uses the sensor, 0 - normal operation
+#define DUMMY_OVERRIDE_THERMISTOR 0 // 1 - uses the sensor, 0 - normal operation
 #define LED_TEST 1 // 1 - flashes LED regardless of reminder state, 0 - normal operation
+#define CONDENSED_DISPLAY 1 // 1 - switches to the more condensed display format 
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
 const long cs_full = 25900;
@@ -37,7 +41,7 @@ long cs2_raw;
 long cs_temp;
 float cs_floz;
 float prev_cs_floz;
-unsigned long max_time_between_drinks = 5000; //ms
+unsigned long max_time_between_drinks = 120000; //ms   default - 3600000
 int analog_battery = 0;
 int analog_thermistor = 0;
 bool dump_flag = false; //used for checking for if dump slope condition was met
@@ -46,7 +50,7 @@ bool dump_flag = false; //used for checking for if dump slope condition was met
 //                                full, normal                one drink                 two drinks                dumped                 refilled          full, cold, charged        hot, one drink            two drinks              three drinks               dead battery
 int sensor_data_test[10][6] = {{3700, 8, 32, 0, 0, 0}, {3700, 12, 24, 0, 0, 0}, {3700, 15, 18, 0, 0, 0}, {3700, 25, 0, 0, 0, 1}, {3700, 7, 32, 0, 0, 0}, {4200, 2, 32, 0, 1, 0}, {3800, 80, 24, 0, 0, 0}, {3700, 12, 16, 0, 0, 0}, {3700, 13, 12, 0, 0, 0}, {3400, 13, 12, 1, 0, 0}};
 int sensor_data_test_stepper = 0; //steps through the matrix - micro should get stuck on the last step
-unsigned long time_between_arrary_updates = 1500; //ms
+unsigned long time_between_arrary_updates = 15000; //ms
 unsigned long time_update; //required to send out array updates
 int ledData = 16; // Setup GPIO2 for LED flip flop data line
 int ledClock = 17; // setup GPIO4 for LED flip flop clock line
@@ -163,7 +167,11 @@ void setup() {
   // Initial measurements
   check_low_battery();
   total_volume = sensor_data[2];
-  update_display();
+  if (CONDENSED_DISPLAY) {
+    update_display_condensed();
+  } else {
+    update_display();
+  }
   // Initiate time since last drink
   //drink_time = millis();
   hour_time = millis();
@@ -187,25 +195,45 @@ void loop() {
     update_last_day_array(drank_last_hour);
     drank_last_hour = 0;
   }
-  // If water level increaes update water statistics
-  if (sensor_data[2] > total_volume) {
-    update_display();
-    total_volume = sensor_data[2];
-    // If water level decreases, update water and user statistics depending on if they drank or dumped water
-  } else if (sensor_data[2] < total_volume) {
-    int decrease = total_volume - sensor_data[2];
-    total_volume = sensor_data[2];
-    if (!sensor_data[5]) {
-      update_statistics(decrease);
-    } else {
-      sensor_data[5] = 0;
-    }
+  if (CONDENSED_DISPLAY) {
+    // If water level increaes update water statistics
+    if (sensor_data[2] > total_volume) {
+      update_display_condensed();
+      total_volume = sensor_data[2];
+      // If water level decreases, update water and user statistics depending on if they drank or dumped water
+    } else if (sensor_data[2] < total_volume) {
+      int decrease = total_volume - sensor_data[2];
+      total_volume = sensor_data[2];
+      if (!sensor_data[5]) {
+        update_statistics(decrease);
+      } else {
+        sensor_data[5] = 0;
+      }
 
+      update_display_condensed();
+    }
+    update_display_condensed();
+  } else {
+    // If water level increaes update water statistics
+    if (sensor_data[2] > total_volume) {
+      update_display();
+      total_volume = sensor_data[2];
+      // If water level decreases, update water and user statistics depending on if they drank or dumped water
+    } else if (sensor_data[2] < total_volume) {
+      int decrease = total_volume - sensor_data[2];
+      total_volume = sensor_data[2];
+      if (!sensor_data[5]) {
+        update_statistics(decrease);
+      } else {
+        sensor_data[5] = 0;
+      }
+
+      update_display();
+    }
     update_display();
   }
-  update_display();
   // Replace with flip flop for final product
-  if ((((cur_time - drink_time) > 3600000) && (drink_time != 0)) || (LED_TEST == 1)) {
+  if ((((cur_time - drink_time) > max_time_between_drinks) && (drink_time != 0)) || (LED_TEST == 1)) { //max_time_between_drinks3600000
     if (led_on) {
       digitalWrite(ledData, LOW);
       digitalWrite(ledClock, HIGH);
@@ -229,7 +257,7 @@ void loop() {
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Sensor Initialization
 int sensor_initialization(void) {
-  if (!DUMMY_SENSORS) {
+  if (!DUMMY_SENSORS || DUMMY_OVERRIDE_WATER) {
     cap.PLSF_Initialization();
   }
   return (sensor_update());
@@ -237,7 +265,23 @@ int sensor_initialization(void) {
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Sensor Update
 int sensor_update(void) {
-  if (!DUMMY_SENSORS) {
+  if (DUMMY_SENSORS) {
+    //-=-=-=-=-=-=-=-=-=-=-     Dummy Sensors     -=-=-=-=-=-=-=-=-=-=-
+    if (millis() >= time_update) {
+      if ((sensor_data_test_stepper == 1) || (sensor_data_test_stepper == 6)) {
+        time_update = millis() + max_time_between_drinks + time_between_arrary_updates; //to trigger the Drink Reminder LED
+      } else {
+        time_update = millis() + time_between_arrary_updates;
+      }
+      for (int x = 0; x < 6; x++) {
+        sensor_data[x] = sensor_data_test[sensor_data_test_stepper][x];
+      }
+      if (sensor_data_test_stepper < 9) {
+        sensor_data_test_stepper++;
+      }
+    }
+  }
+  if (DUMMY_OVERRIDE_BATTERY || !DUMMY_SENSORS) {
     //-=-=-=-=-=-=-=-=-=-=-     Battery     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_9, ADC_WIDTH_12Bit, &analog_battery);
     sensor_data[0] = (int) (ADC_correction(analog_battery) * 1.612); //Battery ideal conversion factor = 1.612
@@ -247,6 +291,8 @@ int sensor_update(void) {
     } else if (sensor_data[0] >= 4200) {
       sensor_data[4] = 1; //sets battery charged flag
     }
+  }
+  if (DUMMY_OVERRIDE_WATER || !DUMMY_SENSORS) {
     //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-
     cs1_raw = cs1.capacitiveSensorRaw(30);
     //cs2_raw = cs2.capacitiveSensorRaw(30);
@@ -277,24 +323,11 @@ int sensor_update(void) {
         sensor_data[2] = (int)cs_floz;
       }
     }
+  }
+  if (DUMMY_OVERRIDE_THERMISTOR || !DUMMY_SENSORS) {
     //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
     sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor));
-  } else {
-    //-=-=-=-=-=-=-=-=-=-=-     Dummy Sensors     -=-=-=-=-=-=-=-=-=-=-
-    if (millis() >= time_update) {
-      if ((sensor_data_test_stepper == 1) || (sensor_data_test_stepper == 6)) {
-        time_update = millis() + max_time_between_drinks + time_between_arrary_updates; //to trigger the Drink Reminder LED
-      } else {
-        time_update = millis() + time_between_arrary_updates;
-      }
-      for (int x = 0; x < 6; x++) {
-        sensor_data[x] = sensor_data_test[sensor_data_test_stepper][x];
-      }
-      if (sensor_data_test_stepper < 9) {
-        sensor_data_test_stepper++;
-      }
-    }
   }
   return (0);
 }
@@ -322,6 +355,64 @@ int ADC_correction(int bad_analog) {
   return ((int)temp_analog);
 }
 
+//-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  OLED Display Update Condensed
+void update_display_condensed(void) {
+  display.clearDisplay();
+  display.setTextSize(2);
+  display.setTextColor(WHITE);
+  display.setCursor(0, 0);
+  display.print(sensor_data[2]);
+  display.print("oz");//123456789123456789123 --  32 oz           891 C -- 32oz  678C
+  if (sensor_data[2] < 10) {
+    display.print(" ");
+  }
+  display.print("  ");
+  if (sensor_data[1] < 100) {
+    display.print(" ");
+  }
+  if (sensor_data[1] < 10) {
+    display.print(" ");
+  }
+  display.print(sensor_data[1]);
+  display.println("C");
+  if (!sensor_data[2]) {
+
+    display.println("!!EMPTY!!");
+    display.setTextSize(1);
+  } else {
+    display.setTextSize(1);
+    display.print("Battery: ");
+    display.print((float)sensor_data[0] / 1000);
+    display.println("v");
+    display.println("");
+  }
+  if (drink_time == 0) {
+    display.println("N/A");
+  } else {
+    unsigned long cur_time = millis();
+    unsigned long mils_elapsed = cur_time - drink_time;
+    unsigned long minutes_elapsed = millis_to_min(mils_elapsed);
+    int minutes_til = (max_time_between_drinks / (1000 * 60)) - (int)minutes_elapsed;
+    display.print("Countdown:");
+    if (minutes_til >= 0) {
+      display.print(" ");
+    }
+    display.print(minutes_til);
+    display.println(" min");
+  }
+
+  display.println("-=- Amount Drank -=-");
+  display.print("Last Hour: ");
+  display.print(drank_last_hour);
+  display.println(" oz");
+
+
+  display.print("24 Hours: ");
+  display.print(drank_last_day());
+  display.println(" oz");
+  display.display();
+}
+
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  OLED Display Update
 void update_display(void) {
   display.clearDisplay();
@@ -329,7 +420,7 @@ void update_display(void) {
   display.setTextColor(WHITE);
   display.setCursor(0, 0);
 
-  display.print("Volume (oz): ");
+  display.print("Volume (oz): ");//123456789123456789123
   display.println(sensor_data[2]);
 
   display.print("Temperature (C): ");
