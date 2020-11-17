@@ -6,22 +6,22 @@
 
 //-=-=-=-=-=-  Constants
 #define pls_samples 2
-#define DUMMY_SENSORS 1 // 1 - uses the test data set, 0 - normal operation
+#define DUMMY_SENSORS 0 // 1 - uses the test data set, 0 - normal operation
 #define DUMMY_OVERRIDE_BATTERY 1 // 1 - uses the sensor, 0 - normal operation
 #define DUMMY_OVERRIDE_WATER 0 // 1 - uses the sensor, 0 - normal operation
-#define DUMMY_OVERRIDE_THERMISTOR 0 // 1 - uses the sensor, 0 - normal operation
-#define LED_TEST 1 // 1 - flashes LED regardless of reminder state, 0 - normal operation
+#define DUMMY_OVERRIDE_THERMISTOR 1 // 1 - uses the sensor, 0 - normal operation
+#define LED_TEST 0 // 1 - flashes LED regardless of reminder state, 0 - normal operation
 #define CONDENSED_DISPLAY 1 // 1 - switches to the more condensed display format 
 const float bottle_radius = 1.5; //inches
 const float bottle_height = 6; //inches
-const long cs_full = 25900;
-const long cs_empty = 3800;
+const long cs_full = 19675;
+const long cs_empty = 7650;
 const float cs_dump_slope = -0.75;
 #define SCREEN_WIDTH 128 // OLED display width, in pixels
 #define SCREEN_HEIGHT 64 // OLED display height, in pixels
 #define update_time 1000 //milliseconds between updates
 const float settle_slope_tolerance = 0.25;  //will update water level after the change of water settles
-const float intermediate_ounce_tolerance = 0.33; //this limits the ounce updates to only occur when the level increases or decreases beyond this tolerance, this was done because the cases where the amount of water was inbetween ounce measurements would bounce between ounces and count as drinks
+const float intermediate_ounce_tolerance = 1; //this limits the ounce updates to only occur when the level increases or decreases beyond this tolerance, this was done because the cases where the amount of water was inbetween ounce measurements would bounce between ounces and count as drinks
 
 
 //-=-=-=-=-=-  Global Variables & Arrays
@@ -141,7 +141,7 @@ class PLSF_Filter
 };
 
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Object Creation
-CapacitiveSensor   cs1 = CapacitiveSensor(33, 25); //pin 25 is the receiver
+CapacitiveSensor   cs1 = CapacitiveSensor(25, 33);//33, 25); //pin 25 is the receiver
 CapacitiveSensor   cs2 = CapacitiveSensor(35, 32); //pin 32 is the receiver
 PLSF_Filter cap;
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
@@ -156,6 +156,10 @@ void setup() {
   adc2_config_channel_atten( ADC2_CHANNEL_9, ADC_ATTEN_11db );
   pinMode(ledData, OUTPUT);
   pinMode(ledClock, OUTPUT);
+  digitalWrite(ledData, LOW);
+  digitalWrite(ledClock, HIGH);
+  digitalWrite(ledClock, LOW);
+  led_on = false;
   Serial.begin(115200);
   if (!display.begin(SSD1306_SWITCHCAPVCC, 0x3C)) { // Address 0x3D for 128x64
     Serial.println(F("SSD1306 allocation failed"));
@@ -296,6 +300,7 @@ int sensor_update(void) {
     //-=-=-=-=-=-=-=-=-=-=-     Water Level     -=-=-=-=-=-=-=-=-=-=-
     cs1_raw = cs1.capacitiveSensorRaw(30);
     //cs2_raw = cs2.capacitiveSensorRaw(30);
+    Serial.println(cs1_raw);
     cs_temp = map((cs1_raw + cs1_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
     //cs_temp = map((cs1_raw + cs2_raw) / 2, cs_empty, cs_full, 0, 100); // converts to percentage full
     if (cs_temp < 0) {
@@ -303,7 +308,8 @@ int sensor_update(void) {
     } else if (cs_temp > 100) {
       cs_temp = 100;
     }
-    cs_floz = ((float)cs_temp / 100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
+    cs_floz = (cs_temp * 32) / 100;
+    //cs_floz = ((float)cs_temp / 100.0) * 3.14159 * bottle_radius * bottle_radius * bottle_height * 0.5541; //converts from percentage to fl-oz
 
     float test = cap.PLSF_Update(cs_floz);
     if (test < cs_dump_slope) {
@@ -327,7 +333,7 @@ int sensor_update(void) {
   if (DUMMY_OVERRIDE_THERMISTOR || !DUMMY_SENSORS) {
     //-=-=-=-=-=-=-=-=-=-=-     Thermistor     -=-=-=-=-=-=-=-=-=-=-
     adc2_get_raw(ADC2_CHANNEL_7, ADC_WIDTH_12Bit, &analog_thermistor);
-    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor));
+    sensor_data[1] = thermistor_conversion(ADC_correction(analog_thermistor)) - 20;
   }
   return (0);
 }
@@ -469,6 +475,12 @@ void update_display(void) {
 //-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-  Check Low Battery
 void check_low_battery() {
   if (sensor_data[3]) {
+    if (led_on) {
+      digitalWrite(ledData, LOW);
+      digitalWrite(ledClock, HIGH);
+      digitalWrite(ledClock, LOW);
+      led_on = false;
+    }
     // Shutdown if battery is low
     display_low_battery();
     esp_light_sleep_start();
